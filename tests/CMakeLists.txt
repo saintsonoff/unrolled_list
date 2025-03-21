@@ -26,6 +26,8 @@ target_link_libraries(
     unrolled-list-lib-tests
     GTest::gtest_main
     GTest::gmock_main
+
+    unrolled_list
 )
 
 target_include_directories(unrolled-list-lib-tests PUBLIC ${PROJECT_SOURCE_DIR})

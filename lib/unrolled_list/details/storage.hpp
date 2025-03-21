@@ -28,8 +28,8 @@ struct UnrolledListNodeChunck {
 
   public:
     size_t size_m = 0;
-    UnrolledListNodeChunck* prev_m = nullptr;
-    UnrolledListNodeChunck *next_m = nullptr;
+    UnrolledListNodeChunck* prev_chunck_ptr_m = nullptr;
+    UnrolledListNodeChunck* next_chunck_ptr_m = nullptr;
     store_t data_m;
 };
 
@@ -50,11 +50,11 @@ class chunck_traits {
 
 
     static node_ptr_t AddChunckBack(node_ptr_t current_chunck, allocator_type& alloc) {
-        return IncludeChunckFront(current_chunck, CreateChunck(alloc));
+        return IncludeChunckBack(current_chunck, CreateChunck(alloc));
     };
 
 
-    static node_ptr_t AddChunkFront(node_ptr_t current_chunck, allocator_type& alloc) {
+    static node_ptr_t AddChunckFront(node_ptr_t current_chunck, allocator_type& alloc) {
         return IncludeChunckFront(current_chunck, CreateChunck(alloc));
     };
 
@@ -65,6 +65,7 @@ class chunck_traits {
 
         if (current_chunck && current_chunck->prev_chunck_ptr_m) {
             next = current_chunck->prev_chunck_ptr_m;
+            next->next_chunck_ptr_m = included_chunck;
         }
 
         included_chunck->next_chunck_ptr_m = next;
@@ -77,12 +78,40 @@ class chunck_traits {
         return included_chunck;
     };
 
+
+    static node_ptr_t IncludeChunckFront(node_ptr_t current_chunck, node_ptr_t begin_node, node_ptr_t end_node) noexcept {
+        if (current_chunck->prev_chunck_ptr_m) {
+            current_chunck->prev_chunck_ptr_m->next_chunck_ptr_m = begin_node;
+            begin_node->prev_chunck_ptr_m = current_chunck->prev_chunck_ptr_m;
+        }
+
+        current_chunck->prev_chunck_ptr_m = end_node;
+        end_node->next_chunck_ptr_m = current_chunck;
+        return begin_node;
+    }
+
+
+    static node_ptr_t IncludeChunckBack(node_ptr_t current_chunck, node_ptr_t begin_node, node_ptr_t end_node) noexcept {
+        if (current_chunck->next_chunck_ptr_m) {
+            current_chunck->next_chunck_ptr_m->prev_chunck_ptr_m = end_node;
+            end_node->next_chunck_ptr_m = current_chunck->next_chunck_ptr_m;
+        }
+
+        current_chunck->next_chunck_ptr_m = begin_node;
+        begin_node->prev_chunck_ptr_m = current_chunck;
+        return begin_node;
+    }
+
+
+
+
     static node_ptr_t IncludeChunckBack(node_ptr_t current_chunck, node_ptr_t included_chunck) noexcept {
         node_ptr_t next = nullptr;
         node_ptr_t prev = current_chunck;
 
         if (current_chunck && current_chunck->next_chunck_ptr_m) {
             next = current_chunck->next_chunck_ptr_m;
+            next->prev_chunck_ptr_m = included_chunck;
         }
 
         included_chunck->next_chunck_ptr_m = next;
@@ -96,45 +125,58 @@ class chunck_traits {
     };
 
 
-    static void RemoveChunck(node_ptr_t& current_chunck, allocator_type& alloc)
+    static void RemoveChunck(node_ptr_t current_chunck, allocator_type& alloc)
       noexcept(std::is_nothrow_destructible_v<node_t>) {
         allocator_trait_t::destroy(alloc, current_chunck);
-        allocator_trait_t::deallocate(alloc, current_chunck);
+        allocator_trait_t::deallocate(alloc, current_chunck, 1);
         current_chunck = nullptr;
     };
 
 
-    static node_ptr_t& ExcludeChunck(node_ptr_t& current_chunck) noexcept {
+    static void RemoveChunck(node_ptr_t beg_chunck, node_ptr_t end_chunck, allocator_type& alloc)
+        noexcept(noexcept(RemoveChunck(beg_chunck, alloc))) {
+        while(beg_chunck != end_chunck) {
+            beg_chunck = beg_chunck->next_chunck_ptr_m;
+            RemoveChunckFront(beg_chunck, alloc);
+        }
+
+        RemoveChunck(beg_chunck, alloc);
+    }
+
+
+    static node_ptr_t ExcludeChunck(node_ptr_t current_chunck) noexcept {
         if (current_chunck->next_chunck_ptr_m)
             current_chunck->next_chunck_ptr_m->prev_chunck_ptr_m = current_chunck->prev_chunck_ptr_m;
 
         if (current_chunck->prev_chunck_ptr_m)
             current_chunck->prev_chunck_ptr_m->next_chunck_ptr_m = current_chunck->next_chunck_ptr_m;
 
+        current_chunck->prev_chunck_ptr_m = current_chunck->next_chunck_ptr_m = nullptr;
         return current_chunck;
     };
 
 
-    static node_ptr_t& ExcludeChunckBack(node_ptr_t& current_chunck) noexcept {
+    static node_ptr_t ExcludeChunckBack(node_ptr_t current_chunck) noexcept {
         return ExcludeChunck(current_chunck->next_chunck_ptr_m);
     };
 
 
-    static node_ptr_t& ExcludeChunckFront(node_ptr_t& current_chunck) noexcept {
+    static node_ptr_t ExcludeChunckFront(node_ptr_t current_chunck) noexcept {
         return ExcludeChunck(current_chunck->prev_chunck_ptr_m);
     };
 
 
-    void RemoveChunckBack(node_ptr_t& current_chunck, allocator_type& alloc) 
+    static void RemoveChunckBack(node_ptr_t current_chunck, allocator_type& alloc) 
       noexcept(noexcept(RemoveChunck(current_chunck, alloc))) {
         RemoveChunck(ExcludeChunckBack(current_chunck), alloc);
     };
 
 
-    void RemoveChunckFront(node_ptr_t& current_chunck, allocator_type& alloc) 
+    static void RemoveChunckFront(node_ptr_t current_chunck, allocator_type& alloc) 
       noexcept(noexcept(RemoveChunck(current_chunck, alloc))) {
         RemoveChunck(ExcludeChunckFront(current_chunck), alloc);
     };
+
 };
 
 
