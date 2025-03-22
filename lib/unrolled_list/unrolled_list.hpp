@@ -74,9 +74,10 @@ class Iterator : std::bidirectional_iterator_tag {
         return *this;
     };
 
-    Iterator operator++(int) const noexcept {
+    Iterator operator++(int) noexcept {
         Iterator result_itr = *this;
-        return ++result_itr;
+        ++(*this);
+        return result_itr;
     };
 
     Iterator& operator--() noexcept {        
@@ -89,9 +90,10 @@ class Iterator : std::bidirectional_iterator_tag {
         return *this;
     };
 
-    Iterator operator--(int) const noexcept {
+    Iterator operator--(int) noexcept {
         Iterator result_itr = *this;
-        return --result_itr;
+        --(*this);
+        return result_itr;
     };
 
     bool operator==(const Iterator& value) const noexcept {
@@ -361,7 +363,6 @@ class unrolled_list {
                 ChunckPlace(&pos_copy, position, std::forward<ArgsTs>(args)...);
                 return_itr = {static_cast<node_t*>(pos_itr.base()), position};
             } else {
-                // position -= pos_copy.size_value / 2;
                 position -= pos_copy.size_value - (pos_copy.size_value / 2);
 
                 ChunckPlace(emplace_node, position, std::forward<ArgsTs>(args)...);
@@ -371,7 +372,7 @@ class unrolled_list {
             std::swap(*static_cast<node_t*>(pos_itr.base()), pos_copy);
             chunck_traits::IncludeChunckBack(static_cast<node_t*>(pos_itr.base()), emplace_node);
 
-
+            
             if (static_cast<node_t*>(pos_itr.base()) == end_chunck_ptr_m) {
                 end_chunck_ptr_m = end_chunck_ptr_m->next_chunck_ptr_m;
             }
@@ -415,7 +416,6 @@ class unrolled_list {
         size_t offset = pos_itr.base().get_chunck_offset();
 
         auto addition_node_deleter = [&alloc = this->alloc_m](node_t* node) mutable {  
-            allocator_trait_t::destroy(alloc, node);
             chunck_traits::RemoveChunck(node, alloc);
         };
 
@@ -518,60 +518,88 @@ class unrolled_list {
         size_t current_offset = pos_itr.base().get_chunck_offset();
 
         auto addition_node_deleter = [&alloc = this->alloc_m](node_t* node) mutable {  
-            allocator_trait_t::destroy(alloc, node);
             chunck_traits::RemoveChunck(node, alloc);
         };
 
         std::unique_ptr<node_t, decltype(addition_node_deleter)> copy_lifetime_manager(nullptr, addition_node_deleter);
-        if constexpr (!std::is_nothrow_move_constructible_v<value_type>) {
-            copy_lifetime_manager = chunck_traits::CreateChunck(alloc_m);
+        if constexpr (std::is_nothrow_move_constructible_v<value_type>) {
+            copy_lifetime_manager.reset(chunck_traits::CreateChunck(alloc_m));
             current_node = copy_lifetime_manager.get();
-            allocator_trait_t::construct(alloc_m, current_node, static_cast<node_t*>(pos_itr.base()));
+            allocator_trait_t::construct(alloc_m, current_node, *static_cast<node_t*>(pos_itr.base()));
         }
 
         data_allocator_trait_t::destroy(data_alloc_m, current_node->data_m + current_offset);
-        shift_left(current_node->data_m + current_offset, current_node->data_m + current_node->size_m, 1);
+        shift_left(current_node->data_m + current_offset + 1,
+            current_node->data_m + current_node->size_m, 1);
+        --(current_node->size_m);
 
-        --current_node->size_m;
         size_t half_size = (current_node->size_value % 2) + (current_node->size_value / 2);
         if (current_node->size_m < half_size) {
-            node_t* credit_node = nullptr;
             if (current_node->next_chunck_ptr_m && current_node->next_chunck_ptr_m->size_m > half_size) {
+                node_t* credit_node = nullptr;
                 credit_node = current_node->next_chunck_ptr_m;
-            } else if (current_node->prev_chunck_ptr_m && current_node->prev_chunck_ptr_m->size_m > half_size) {
-                credit_node = current_node->prev_chunck_ptr_m;
-            }
 
-            if (credit_node) {
-                allocator_trait_t::construct(alloc_m, current_node + current_node->size_m,
-                    std::move(*(credit_node->data_m + credit_node->size_m)));
+                data_allocator_trait_t::construct(data_alloc_m, current_node->data_m + current_node->size_m,
+                    std::move(*(credit_node->data_m + 0)));
 
-                allocator_trait_t::destroy(alloc_m, credit_node->data_m + credit_node->size_m);
+                data_allocator_trait_t::destroy(data_alloc_m, credit_node->data_m + 0);
+                shift_left(credit_node->data_m + 1,
+                    credit_node->data_m + credit_node->size_m, 1);
+
+                ++(current_node->size_m);
                 --(credit_node->size_m);
+            } else if (current_node->prev_chunck_ptr_m && current_node->prev_chunck_ptr_m->size_m > half_size) {
+                node_t* credit_node = nullptr;
+                credit_node = current_node->prev_chunck_ptr_m;
+
+                data_allocator_trait_t::construct(data_alloc_m, current_node->data_m + current_node->size_m,
+                    std::move(*(credit_node->data_m + credit_node->size_m - 1)));
+
+                data_allocator_trait_t::destroy(data_alloc_m, credit_node->data_m + credit_node->size_m - 1);
+
+                ++(current_node->size_m);
                 --(credit_node->size_m);
             } else {
                 if (current_node->next_chunck_ptr_m && current_node->next_chunck_ptr_m->size_m <= half_size) {
-                    MergeNode(current_node->next_chunck_ptr_m, current_node);
-                    chunck_traits::RemoveChunckBack(current_node);
+                    current_node = MergeNode(current_node->next_chunck_ptr_m, current_node);
+                    chunck_traits::RemoveChunckBack(current_node, alloc_m);
                 } else if (current_node->prev_chunck_ptr_m && current_node->prev_chunck_ptr_m->size_m <= half_size) {
-                    MergeNode(current_node->prev_chunck_ptr_m, current_node);
-                    chunck_traits::RemoveChunckFront(current_node);
+                    current_node = MergeNode(current_node->prev_chunck_ptr_m, current_node);
+                    chunck_traits::RemoveChunckFront(current_node, alloc_m);
                 }
+                copy_lifetime_manager.release();
+                copy_lifetime_manager.reset(current_node);
             }
         }
 
 
-        if constexpr (!std::is_nothrow_move_constructible_v<value_type>) {
-            std::swap(current_node, copy_lifetime_manager.get());
+        if constexpr (std::is_nothrow_move_constructible_v<value_type>) {
+            current_node = static_cast<node_t*>(pos_itr.base());
+            node_t* swap_ptr_tmp = copy_lifetime_manager.release();
+
+            std::swap(current_node, swap_ptr_tmp);
+            copy_lifetime_manager.reset(swap_ptr_tmp);
 
             if (current_node->next_chunck_ptr_m)
                 current_node->next_chunck_ptr_m->prev_chunck_ptr_m = current_node;
 
             if (current_node->prev_chunck_ptr_m)
                 current_node->prev_chunck_ptr_m->next_chunck_ptr_m = current_node;
+
+            
         }
 
-        return {current_node, pos_itr};
+        if (static_cast<node_t*>(pos_itr.base()) == begin_chunck_ptr_m
+          && static_cast<node_t*>(pos_itr.base()) == end_chunck_ptr_m) {
+            begin_chunck_ptr_m = end_chunck_ptr_m = current_node;
+        } else if (static_cast<node_t*>(pos_itr.base()) == begin_chunck_ptr_m) {
+            begin_chunck_ptr_m = current_node;
+        } else if (static_cast<node_t*>(pos_itr.base()) == end_chunck_ptr_m) {
+            end_chunck_ptr_m = current_node;
+        }
+
+        --size_m;
+        return {current_node, current_offset - 1};
     };
 
     iterator erase(const_iterator beg_pos_itr, const_iterator end_pos_itr) {
@@ -717,7 +745,6 @@ class unrolled_list {
         node_t* splited_node_ptr = current_node;
 
         auto addition_node_deleter = [&alloc = this->alloc_m](node_t* node) mutable {  
-            allocator_trait_t::destroy(alloc, node);
             chunck_traits::RemoveChunck(node, alloc);
         };
         std::unique_ptr<node_t, decltype(addition_node_deleter)> sprited_node_smart_ptr(nullptr, addition_node_deleter);
@@ -740,8 +767,10 @@ class unrolled_list {
         }
 
         if constexpr(!std::is_nothrow_move_constructible_v<value_type>) {
-            std::swap(*current_node, *splited_node_ptr);
-            splited_node_ptr = nullptr;
+            node_t* swap_ptr_tmp = sprited_node_smart_ptr.release();
+            std::swap(splited_node_ptr, swap_ptr_tmp);
+            sprited_node_smart_ptr.reset(swap_ptr_tmp);
+
         }
 
         another_node->size_m = balance + current_node->size_m / 2;
@@ -751,20 +780,23 @@ class unrolled_list {
     };
 
 
-    void MergeNode(node_t* from_node, node_t* to_node)
+    node_t* MergeNode(node_t* from_node, node_t* to_node)
       noexcept(std::is_nothrow_move_constructible_v<value_type> && std::is_nothrow_destructible_v<value_type>) {       
+        node_t* beg_chunck = begin_chunck_ptr_m;
+        node_t* end_chunck = end_chunck_ptr_m;
+
         node_t* from_node_ptr = from_node;
         node_t* to_node_ptr = to_node;
 
         auto addition_node_deleter = [&alloc = this->alloc_m](node_t* node) mutable {  
-            allocator_trait_t::destroy(alloc, node);
             chunck_traits::RemoveChunck(node, alloc);
         };
 
-        std::unique_ptr<node_t*, decltype(addition_node_deleter)> copy_livetime_controlled[2] = {{nullptr, addition_node_deleter}, {nullptr, addition_node_deleter}};
+        std::unique_ptr<node_t, decltype(addition_node_deleter)> copy_livetime_controlled[2] = {{nullptr, addition_node_deleter}, {nullptr, addition_node_deleter}};
 
         if constexpr(std::is_nothrow_move_constructible_v<value_type>) {
-            copy_livetime_controlled.reset({chunck_traits::CreateChunck(alloc_m), chunck_traits::CreateChunck(alloc_m)});
+            copy_livetime_controlled[0].reset(chunck_traits::CreateChunck(alloc_m));
+            copy_livetime_controlled[1].reset(chunck_traits::CreateChunck(alloc_m));
 
             from_node_ptr = copy_livetime_controlled[0].get();
             to_node_ptr = copy_livetime_controlled[1].get();
@@ -783,24 +815,59 @@ class unrolled_list {
         }
 
         if constexpr(std::is_nothrow_move_constructible_v<value_type>) {
-            std::swap(from_node_ptr, copy_livetime_controlled[0].get());
-            std::swap(to_node_ptr, copy_livetime_controlled[1].get());
+            from_node_ptr = from_node;
+            node_t* swap_ptr_tmp = copy_livetime_controlled[0].release();
+            std::swap(from_node_ptr, swap_ptr_tmp);
+            copy_livetime_controlled[0].reset(swap_ptr_tmp);
 
-            if (from_node_ptr->next_chunck_ptr_m)
-                from_node_ptr->next_chunck_ptr_m->prev_chunck_ptr_m = from_node_ptr;
+            to_node_ptr = to_node;
+            swap_ptr_tmp = copy_livetime_controlled[1].release();
+            std::swap(to_node_ptr, swap_ptr_tmp);
+            copy_livetime_controlled[1].reset(swap_ptr_tmp);
 
-            if (from_node_ptr->prev_chunck_ptr_m)
-                from_node_ptr->prev_chunck_ptr_m->next_chunck_ptr_m = from_node_ptr;
+            if (from_node->next_chunck_ptr_m == to_node || to_node->prev_chunck_ptr_m == from_node) {
+                if (from_node_ptr->prev_chunck_ptr_m)
+                    from_node_ptr->prev_chunck_ptr_m->next_chunck_ptr_m = from_node_ptr;
+                if (to_node_ptr->next_chunck_ptr_m)
+                    to_node_ptr->next_chunck_ptr_m->prev_chunck_ptr_m = to_node_ptr;
 
-            if (to_node_ptr->next_chunck_ptr_m)
-                to_node_ptr->next_chunck_ptr_m->prev_chunck_ptr_m = to_node_ptr;
+                from_node_ptr->next_chunck_ptr_m = to_node_ptr;
+                to_node_ptr->prev_chunck_ptr_m = from_node_ptr;
 
-            if (to_node_ptr->prev_chunck_ptr_m)
-                to_node_ptr->prev_chunck_ptr_m->next_chunck_ptr_m = to_node_ptr;
+            } else if (from_node->prev_chunck_ptr_m == to_node || to_node->next_chunck_ptr_m == from_node) {
+                if (from_node_ptr->next_chunck_ptr_m)
+                    from_node_ptr->next_chunck_ptr_m->prev_chunck_ptr_m = from_node_ptr;
+
+                if (to_node_ptr->prev_chunck_ptr_m)
+                    to_node_ptr->prev_chunck_ptr_m->next_chunck_ptr_m = to_node_ptr;
+
+                from_node_ptr->prev_chunck_ptr_m = to_node_ptr;
+                to_node_ptr->next_chunck_ptr_m = from_node_ptr;
+
+            } else {
+                if (to_node_ptr->next_chunck_ptr_m)
+                    to_node_ptr->next_chunck_ptr_m->prev_chunck_ptr_m = to_node_ptr;
+
+                if (to_node_ptr->prev_chunck_ptr_m)
+                    to_node_ptr->prev_chunck_ptr_m->next_chunck_ptr_m = to_node_ptr;
+
+                if (from_node_ptr->next_chunck_ptr_m)
+                    from_node_ptr->next_chunck_ptr_m->prev_chunck_ptr_m = from_node_ptr;
+
+                if (from_node_ptr->prev_chunck_ptr_m)
+                    from_node_ptr->prev_chunck_ptr_m->next_chunck_ptr_m = from_node_ptr;
+            }
         }
 
+        if (to_node == beg_chunck || from_node == beg_chunck)
+            begin_chunck_ptr_m = to_node_ptr;
+
+        if (to_node == end_chunck || from_node == end_chunck)
+            end_chunck_ptr_m = to_node_ptr;
+
+
         to_node_ptr->size_m += from_node_ptr->size_m; 
-        to_node_ptr->size_m = 0;
+        from_node_ptr->size_m = 0;
 
         return to_node_ptr;
     };
@@ -814,10 +881,12 @@ class unrolled_list {
         }
 
         try {
-            data_allocator_trait_t::construct(data_alloc_m, current_chunck->data_m + position, std::forward<ArgsTs>(args)...);
+            data_allocator_trait_t::construct(data_alloc_m, current_chunck->data_m + position,
+                std::forward<ArgsTs>(args)...);
         } catch(...) {
             if (current_chunck->size_m) {
-                shift_left(current_chunck->data_m + position + 1, current_chunck->data_m + current_chunck->size_m + 1, 1);
+                shift_left(current_chunck->data_m + position + 1,
+                    current_chunck->data_m + current_chunck->size_m + 1, 1);
             }    
 
             throw;
@@ -873,7 +942,8 @@ class unrolled_list {
         }
         std::cout << "\n";
         std::cout << "count: " << count << "\n";
-        std::cout << "== == == == == == end == == == == == ==\n\n";
+        std::cout << "== == == == == == end == == == == == ==\n";
+        std::cout << std::endl;
     };
 
 

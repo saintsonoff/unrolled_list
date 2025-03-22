@@ -131,13 +131,20 @@ int main(int argc, char** argv) {
     decltype(cont) cont2 = cont;
     cont2.dbg_print();
 
+
+    std::cout << "\n\n/////////////////////////////////////////////////////\n\n";
+
+    cont.dbg_print();
+
     while (cont.size() > 3) {
         auto er_itr = cont.begin();
-        er_itr++;
-        er_itr++;
+        // ++er_itr;
+        // ++er_itr;
         cont.erase(er_itr);
         cont.dbg_print();
     }
+
+    cont.dbg_print();
 
     return 0;
 }
