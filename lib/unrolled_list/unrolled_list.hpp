@@ -697,7 +697,7 @@ class unrolled_list {
 
 
   public:
-    size_type max_size() const noexcept { return std::numeric_limits<size_type>::max(); };
+    size_type max_size() const noexcept { return alloc_m.max_size(); };
     size_type size() const noexcept { return size_m; };
     bool empty() const noexcept { return size_m == 0; };
     allocator_type get_allocator() const { return alloc_m; };
@@ -968,6 +968,5 @@ protected:
 
 template<std::copy_constructible DataType, size_t ChunckSize = 10, typename AllocatorType = std::allocator<DataType>>
 using unrolled_list = labwork7::unrolled_list<DataType, ChunckSize, AllocatorType>;
-
 
 #endif // _UNROLLED_LIST_HPP_

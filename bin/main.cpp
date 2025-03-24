@@ -1,11 +1,16 @@
 #include <cstddef>
 #include <iostream>
+#include <memory>
 #include <vector>
+#include <list>
 #include <iterator>
 
-#include <unrolled_list.hpp>
+// #include <unrolled_list.hpp>
+
+#include <chunck_allocator.hpp>
 
 int main(int argc, char** argv) {
+#if 0
     auto print_list = [](auto& cont) {
         for (auto elem : cont) {
             std::cout << elem << " ";
@@ -145,6 +150,113 @@ int main(int argc, char** argv) {
     }
 
     cont.dbg_print();
+#endif
+
+
+#if 0
+    using alloc_t = labwork7::chunck_allocator::ChunckAllocator<int>;
+
+    alloc_t alloc;
+
+    using node_t = labwork7::chunck_allocator::details::ChunckAllocatorNode<int, 10>;
+    using data_t = node_t::data_t;
+
+
+    int* ptr;
+
+    ptr = alloc.allocate(1);
+    alloc.construct(ptr, 30);
+
+    std::cout << *ptr << std::endl;
+
+    alloc.destroy(ptr);
+    alloc.deallocate(ptr, 1);
+
+    std::string s;
+    std::cin >> s;
+    std::cout << s << std::endl;
+
+
+    std::cout << typeid(alloc_t::rebind<float>::other).name() << std::endl;
+
+    using other_alloc_t = alloc_t::rebind<float>::other;
+
+    other_alloc_t other_alloc;
+
+    float* other_ptr;
+
+    other_ptr = other_alloc.allocate(1);
+    other_alloc.construct(other_ptr, 30.89);
+
+    std::cout << *other_ptr << std::endl;
+
+    other_alloc.destroy(other_ptr);
+    other_alloc.deallocate(other_ptr, 1);
+#endif
+
+
+#if 1
+    labwork7::list<int> lst;
+
+    std::vector<labwork7::list<int>::iterator> itr_cont;
+    for (size_t i = 0; i < 100; ++i) {
+        lst.push_back(i);
+        itr_cont.push_back(--lst.end());
+    }
+
+    size_t offens = 3;
+    for (size_t ind = 0; ind != itr_cont.size() / offens; ++ind) {
+        std::cout << *itr_cont[ind * offens] << " ";
+        lst.erase(itr_cont[ind * offens]);
+    }
+    std::cout << "\ncount: " << itr_cont.size() / 4 << "\n";
+    std::cout << std::endl << "--------------------------------------------" << std::endl;
+
+    for (size_t i = 0; i < 200; ++i) {
+        lst.push_back(i);
+        itr_cont.push_back(--lst.end());
+    }
+
+    for (auto& elem : lst) {
+        std::cout << elem << " ";
+    }
+
+    for (size_t ind = 0; ind != itr_cont.size() / offens; ++ind) {
+        lst.erase(itr_cont[ind * offens]);
+    }
+
+
+    std::cout << "\n-----------------------------------------------\n" << std::endl;
+
+    for (auto& elem : lst) {
+        std::cout << elem << " ";
+    }
+
+
+    labwork7::list<int> lst_cpy = lst;
+
+    lst_cpy.push_back(999);
+    lst_cpy.push_back(999);
+    lst_cpy.push_back(999);
+    lst_cpy.push_back(999);
+    lst_cpy.push_back(999);
+    lst_cpy.erase(lst_cpy.begin());
+    lst_cpy.erase(lst_cpy.begin());
+    lst_cpy.erase(lst_cpy.begin());
+    lst_cpy.erase(lst_cpy.begin());
+    lst_cpy.push_back(999);
+    lst_cpy.push_back(999);
+
+    std::cout << "\n-----------------------------------------------\n" << std::endl;
+
+    for (auto& elem : lst_cpy) {
+        std::cout << elem << " ";
+    }
+    
+
+
+    std::cout << std::endl;
+#endif
 
     return 0;
 }

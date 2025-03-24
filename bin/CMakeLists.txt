@@ -5,4 +5,5 @@ add_executable(${current_target_name} main.cpp)
 target_link_libraries(${current_target_name}
   PUBLIC
     unrolled_list
+    chunck_allocator
 )
