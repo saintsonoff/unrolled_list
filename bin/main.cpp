@@ -5,12 +5,11 @@
 #include <list>
 #include <iterator>
 
-// #include <unrolled_list.hpp>
-
-#include <chunck_allocator.hpp>
+#include <unrolled_list.hpp>
+// #include <chunck_allocator.hpp>
 
 int main(int argc, char** argv) {
-#if 0
+#if 1
     auto print_list = [](auto& cont) {
         for (auto elem : cont) {
             std::cout << elem << " ";
@@ -139,7 +138,13 @@ int main(int argc, char** argv) {
 
     std::cout << "\n\n/////////////////////////////////////////////////////\n\n";
 
-    cont.dbg_print();
+    decltype(cont) er_rang_cont;
+
+    for (int elem = 0; elem < 1000; ++elem) {
+        er_rang_cont.push_back(elem);
+    }
+
+    er_rang_cont.dbg_print();
 
     while (cont.size() > 3) {
         auto er_itr = cont.begin();
@@ -149,7 +154,31 @@ int main(int argc, char** argv) {
         cont.dbg_print();
     }
 
-    cont.dbg_print();
+    auto er_beg_itr = er_rang_cont.begin();
+    auto er_end_itr = er_rang_cont.end();
+
+
+    std::cout << "\n\n/////////////////////////////////////////////////////\n\n";
+    er_rang_cont.dbg_print();
+
+
+    er_beg_itr++;
+    er_beg_itr++;
+    er_beg_itr++;
+    er_beg_itr++;
+    er_beg_itr++;
+
+    --er_end_itr;
+    --er_end_itr;
+    --er_end_itr;
+    --er_end_itr;
+    --er_end_itr;
+
+    er_rang_cont.erase(er_beg_itr, er_end_itr);
+    er_rang_cont.dbg_print();
+
+    er_rang_cont.erase(er_rang_cont.begin(), er_rang_cont.end());
+    er_rang_cont.dbg_print();
 #endif
 
 
@@ -195,7 +224,7 @@ int main(int argc, char** argv) {
 #endif
 
 
-#if 1
+#if 0
     labwork7::list<int> lst;
 
     std::vector<labwork7::list<int>::iterator> itr_cont;

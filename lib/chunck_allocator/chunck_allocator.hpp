@@ -16,6 +16,23 @@ namespace chunck_allocator {
 
 namespace details {
 
+    template<typename Type>
+    struct size_of_type {
+        static constexpr size_t value = sizeof(Type);
+    };
+    
+    template<typename Type>
+    constexpr size_t size_of_type_v = size_of_type<Type>::value;    
+
+    template<typename Type, size_t kMinSize>
+    struct is_large_obj {
+        static constexpr bool value = size_of_type_v<Type> < kMinSize;
+    };
+        
+    template<typename Type, size_t kMinSize>
+    static constexpr bool is_large_obj_v = is_large_obj<Type, kMinSize>::value;
+    
+
 template<typename DataType>
 class RawStorage {
   public:
@@ -180,7 +197,6 @@ class ChunckAllocator : public std::allocator_traits<SuballocatorType>::
         using other = ChunckAllocator<AnotherDataType, kMaxChunckSize, SuballocatorType>;
     };
 
-
   private:
     using node_t = details::ChunckAllocatorNode<value_type, kMaxChunckSize>;
     using node_data_t = details::ChunckAllocatorNode<value_type, kMaxChunckSize>::data_t;
@@ -271,8 +287,12 @@ class ChunckAllocator : public std::allocator_traits<SuballocatorType>::
     };
 
     void deallocate(pointer ptr, size_type size) {
+        if (size > kMaxChunckSize) {
+            throw std::logic_error{"You can deallocate only single object"};
+        }
+
         if (size != 1) {
-            throw std::logic_error{"You can allocate only single object"};
+
         }
 
         node_data_t* current_data_ptr = reinterpret_cast<node_data_t*>(ptr);
@@ -305,7 +325,6 @@ class ChunckAllocator : public std::allocator_traits<SuballocatorType>::
         }
 
         reserve_cont_m.insert(current_data_ptr);
-        // --(current_node->size);
     };
 
     void destroy(pointer ptr) {
@@ -332,6 +351,9 @@ class ChunckAllocator : public std::allocator_traits<SuballocatorType>::
         b_chunck_m = e_chunck_m = nullptr;
     }
 
+  public:
+    bool operator==(const ChunckAllocator& value) { return this == &value; };
+    bool operator!=(const ChunckAllocator& value) { return !(*this == value); };
     
   private:
     node_t* b_chunck_m = nullptr;

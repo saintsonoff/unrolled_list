@@ -25,25 +25,6 @@ namespace labwork7 {
 namespace details {
 
 
-template<typename Type>
-struct size_of_type {
-    static constexpr size_t value = sizeof(Type);
-};
-
-
-template<typename Type>
-constexpr size_t size_of_type_v = size_of_type<Type>::value;
-
-
-template<typename Type>
-struct is_large_obj {
-    static constexpr bool value = size_of_type_v<Type> < (size_of_type_v<uint64_t> * 3);
-};
-
-
-template<typename Type>
-static constexpr bool is_large_obj_v = is_large_obj<Type>::value;
-
 template<typename UnrolledListType>
 class Iterator : std::bidirectional_iterator_tag {
   public:
@@ -517,6 +498,13 @@ class unrolled_list {
         node_t* current_node = static_cast<node_t*>(pos_itr.base());
         size_t current_offset = pos_itr.base().get_chunck_offset();
 
+        if (size_m == 1) {
+            data_allocator_trait_t::destroy(data_alloc_m, current_node->data_m + current_offset);
+            chunck_traits::RemoveChunck(begin_chunck_ptr_m, alloc_m);
+            begin_chunck_ptr_m = end_chunck_ptr_m = nullptr;
+            return end();
+        }
+
         auto addition_node_deleter = [&alloc = this->alloc_m](node_t* node) mutable {  
             chunck_traits::RemoveChunck(node, alloc);
         };
@@ -543,6 +531,7 @@ class unrolled_list {
                     std::move(*(credit_node->data_m + 0)));
 
                 data_allocator_trait_t::destroy(data_alloc_m, credit_node->data_m + 0);
+                current_offset = 0;
                 shift_left(credit_node->data_m + 1,
                     credit_node->data_m + credit_node->size_m, 1);
 
@@ -599,11 +588,17 @@ class unrolled_list {
         }
 
         --size_m;
-        return {current_node, current_offset - 1};
+        return {current_node, current_offset};
     };
 
     iterator erase(const_iterator beg_pos_itr, const_iterator end_pos_itr) {
+        size_t count = std::distance(beg_pos_itr, end_pos_itr);
+        iterator current_itr = beg_pos_itr;
 
+        while (count--) {
+            current_itr = erase(current_itr);
+        }
+        return current_itr;
     };
 
   public:
