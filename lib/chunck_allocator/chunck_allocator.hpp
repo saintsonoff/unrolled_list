@@ -16,22 +16,33 @@ namespace chunck_allocator {
 
 namespace details {
 
-    template<typename Type>
-    struct size_of_type {
-        static constexpr size_t value = sizeof(Type);
-    };
-    
-    template<typename Type>
-    constexpr size_t size_of_type_v = size_of_type<Type>::value;    
+template<typename Type>
+struct size_of_type {
+    static constexpr size_t value = sizeof(Type);
+};
 
-    template<typename Type, size_t kMinSize>
-    struct is_large_obj {
-        static constexpr bool value = size_of_type_v<Type> < kMinSize;
-    };
-        
-    template<typename Type, size_t kMinSize>
-    static constexpr bool is_large_obj_v = is_large_obj<Type, kMinSize>::value;
+template<typename Type>
+constexpr size_t size_of_type_v = size_of_type<Type>::value;    
+
+template<typename Type, size_t kMinSize>
+struct is_large_obj {
+    static constexpr bool value = size_of_type_v<Type> > kMinSize;
+};
     
+template<typename Type, size_t kMinSize>
+static constexpr bool is_large_obj_v = is_large_obj<Type, kMinSize>::value;
+
+
+template<bool is_light>
+struct LightObjectNotification {
+
+};
+
+template<>
+struct [[deprecated("object too light, allocator usage is not great solution (-_-)")]]
+LightObjectNotification<true> {
+};
+
 
 template<typename DataType>
 class RawStorage {
@@ -201,6 +212,11 @@ class ChunckAllocator : public std::allocator_traits<SuballocatorType>::
     using node_t = details::ChunckAllocatorNode<value_type, kMaxChunckSize>;
     using node_data_t = details::ChunckAllocatorNode<value_type, kMaxChunckSize>::data_t;
     using chunck_traits = details::chunck_traits<node_t>; 
+
+    private:
+    using do_notification = details::LightObjectNotification<
+        !details::is_large_obj_v<DataType, sizeof(size_t) * 2 + (sizeof(node_t) - sizeof(node_data_t)) / kMaxChunckSize>
+    >;
 
   public:
     ChunckAllocator() noexcept {  };
