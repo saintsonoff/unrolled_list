@@ -203,13 +203,13 @@ class ChunckAllocator : public std::allocator_traits<SuballocatorType>::
     using chunck_traits = details::chunck_traits<node_t>; 
 
   public:
-    ChunckAllocator() {  };
+    ChunckAllocator() noexcept {  };
 
-    ChunckAllocator(const ChunckAllocator& value) : ChunckAllocator() {  };
+    ChunckAllocator(const ChunckAllocator& value) noexcept : ChunckAllocator() {  };
     
     template<typename AnotherDataType>
     ChunckAllocator(const ChunckAllocator<AnotherDataType, kMaxChunckSize,
-        typename allocator_traits_t::template rebind_alloc<AnotherDataType>>& value) : ChunckAllocator() {  };
+        typename allocator_traits_t::template rebind_alloc<AnotherDataType>>& value) noexcept : ChunckAllocator() {  };
 
     ChunckAllocator(ChunckAllocator&& value)
         : b_chunck_m(value.b_chunck_m), e_chunck_m(value.e_chunck_m),
@@ -221,10 +221,10 @@ class ChunckAllocator : public std::allocator_traits<SuballocatorType>::
 
     template<typename AnotherDataType>
     ChunckAllocator(ChunckAllocator<AnotherDataType, kMaxChunckSize,
-        typename allocator_traits_t::template rebind_alloc<AnotherDataType>>&& value) : ChunckAllocator() {  };
+        typename allocator_traits_t::template rebind_alloc<AnotherDataType>>&& value) noexcept : ChunckAllocator() {  };
 
 
-    ChunckAllocator& operator=(const ChunckAllocator& value) {
+    ChunckAllocator& operator=(const ChunckAllocator& value) noexcept {
         if (this == &value) {
             return *this;
         }
@@ -235,7 +235,7 @@ class ChunckAllocator : public std::allocator_traits<SuballocatorType>::
     }
 
     
-    ChunckAllocator& operator=(ChunckAllocator&& value) {
+    ChunckAllocator& operator=(ChunckAllocator&& value) noexcept {
         if (this == &value)
             return *this;
 
@@ -352,8 +352,8 @@ class ChunckAllocator : public std::allocator_traits<SuballocatorType>::
     }
 
   public:
-    bool operator==(const ChunckAllocator& value) { return this == &value; };
-    bool operator!=(const ChunckAllocator& value) { return !(*this == value); };
+    bool operator==(const ChunckAllocator& value) const noexcept { return this == &value; };
+    bool operator!=(const ChunckAllocator& value) const noexcept { return !(*this == value); };
     
   private:
     node_t* b_chunck_m = nullptr;
