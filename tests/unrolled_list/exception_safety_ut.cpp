@@ -1,4 +1,4 @@
-#include <unrolled_list.h>
+#include <unrolled_list.hpp>
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
@@ -7,23 +7,23 @@
 
 class NodeTag {};
 
-class SomeObj {
+class SomeObjExSafe {
 public:
     static inline int CopiesCount = 0;
     static inline int DestructorCalled = 0;
 
-    SomeObj() = default;
+    SomeObjExSafe() = default;
 
-    SomeObj(SomeObj&&) {}
+    SomeObjExSafe(SomeObjExSafe&&) {}
 
-    SomeObj(const SomeObj&) {
+    SomeObjExSafe(const SomeObjExSafe&) {
         ++CopiesCount;
         if (CopiesCount == 3) {
             throw std::runtime_error("");
         }
     }
 
-    ~SomeObj() {
+    ~SomeObjExSafe() {
         ++DestructorCalled;
     }
 };
@@ -67,9 +67,9 @@ public:
     }
 
     void deallocate(T* p, std::size_t n) {
-        if constexpr (std::is_same_v<T, SomeObj>) {
-            ++TestAllocator<SomeObj>::DeallocationCount;
-            TestAllocator<SomeObj>::ElementsDeallocated += n;
+        if constexpr (std::is_same_v<T, SomeObjExSafe>) {
+            ++TestAllocator<SomeObjExSafe>::DeallocationCount;
+            TestAllocator<SomeObjExSafe>::ElementsDeallocated += n;
         } else {
             ++TestAllocator<NodeTag>::DeallocationCount;
             TestAllocator<NodeTag>::ElementsDeallocated += n;
@@ -78,9 +78,9 @@ public:
     }
 
     pointer allocate(size_type sz) {
-        if constexpr (std::is_same_v<T, SomeObj>) {
-            ++TestAllocator<SomeObj>::AllocationCount;
-            TestAllocator<SomeObj>::ElementsAllocated += sz;
+        if constexpr (std::is_same_v<T, SomeObjExSafe>) {
+            ++TestAllocator<SomeObjExSafe>::AllocationCount;
+            TestAllocator<SomeObjExSafe>::ElementsAllocated += sz;
         } else {
             ++TestAllocator<NodeTag>::AllocationCount;
             TestAllocator<NodeTag>::ElementsAllocated += sz;
@@ -93,17 +93,17 @@ public:
 class ExceptionSafetyTest : public testing::Test {
 public:
     void SetUp() override {
-        SomeObj::CopiesCount = 0;
-        SomeObj::DestructorCalled = 0;
+        SomeObjExSafe::CopiesCount = 0;
+        SomeObjExSafe::DestructorCalled = 0;
 
-        TestAllocator<SomeObj>::AllocationCount = 0;
-        TestAllocator<SomeObj>::ElementsAllocated = 0;
+        TestAllocator<SomeObjExSafe>::AllocationCount = 0;
+        TestAllocator<SomeObjExSafe>::ElementsAllocated = 0;
 
         TestAllocator<NodeTag>::AllocationCount = 0;
         TestAllocator<NodeTag>::ElementsAllocated = 0;
 
-        TestAllocator<SomeObj>::DeallocationCount = 0;
-        TestAllocator<SomeObj>::ElementsDeallocated = 0;
+        TestAllocator<SomeObjExSafe>::DeallocationCount = 0;
+        TestAllocator<SomeObjExSafe>::ElementsDeallocated = 0;
 
         TestAllocator<NodeTag>::DeallocationCount = 0;
         TestAllocator<NodeTag>::ElementsDeallocated = 0;
@@ -112,7 +112,7 @@ public:
 };
 
 /*
-    В тесте складывается 5 инстансов класса SomeObj в std::list.
+    В тесте складывается 5 инстансов класса SomeObjExSafe в std::list.
     Далее вызывается конструктор unrolled_list от двух итераторов
     Хранимый тип имеет особенность: он выбрасывает исключение, когда конструктор будет вызван в третий раз
 
@@ -125,20 +125,20 @@ public:
     * -- под Node имеется в виду какой-то ваш класс, которым вы описали ноду, имя класса не принципиально
 */
 TEST_F(ExceptionSafetyTest, failesAtConstruct) {
-    std::list<SomeObj> std_list;
+    std::list<SomeObjExSafe> std_list;
     for (int i = 0; i < 5; ++i) {
-        std_list.push_back(SomeObj{});
+        std_list.push_back(SomeObjExSafe{});
     }
-    SomeObj::DestructorCalled = 0;
+    SomeObjExSafe::DestructorCalled = 0;
 
-    TestAllocator<SomeObj> allocator;
-    using unrolled_list_type = unrolled_list<SomeObj, 16, TestAllocator<SomeObj>>;
+    TestAllocator<SomeObjExSafe> allocator;
+    using unrolled_list_type = unrolled_list<SomeObjExSafe, 16, TestAllocator<SomeObjExSafe>>;
 
     ASSERT_ANY_THROW(
         unrolled_list_type ul(std_list.begin(), std_list.end(), allocator)
     );
 
-    ASSERT_EQ(SomeObj::DestructorCalled, 2);
+    ASSERT_EQ(SomeObjExSafe::DestructorCalled, 2);
 
     ASSERT_EQ(TestAllocator<NodeTag>::AllocationCount, TestAllocator<NodeTag>::DeallocationCount);
     ASSERT_EQ(TestAllocator<NodeTag>::ElementsAllocated, TestAllocator<NodeTag>::ElementsDeallocated);

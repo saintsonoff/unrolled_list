@@ -1,3 +1,9 @@
-add_executable(${PROJECT_NAME} main.cpp)
+set(current_target_name ${PROJECT_NAME})
 
-target_include_directories(${PROJECT_NAME} PUBLIC ${PROJECT_SOURCE_DIR})
+add_executable(${current_target_name} main.cpp)
+
+target_link_libraries(${current_target_name}
+  PUBLIC
+    unrolled_list
+    chunck_allocator
+)

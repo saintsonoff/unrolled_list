@@ -1,4 +1,4 @@
-#include <unrolled_list.h>
+#include <unrolled_list.hpp>
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
@@ -58,7 +58,7 @@ public:
     }
 
     void deallocate(pointer p, std::size_t n) {
-
+        delete[] p;
     }
 
     bool operator==(const TestAllocator& other) const {
